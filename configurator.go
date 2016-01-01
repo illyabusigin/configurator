@@ -11,14 +11,6 @@ import (
 	"github.com/spf13/viper"
 )
 
-/*
-How to specify config name?
-How to specify config file paths?
-How to wath config file for changes?
-How to specify remote configurations?
-How to not override already specified config values?
-*/
-
 const (
 	tagEnv     = "env"
 	tagFlag    = "flag"
@@ -30,12 +22,11 @@ var (
 	ErrNoConfigValuesDetected = errors.New("No configuration values detected!")
 	ErrNotStruct              = errors.New("Value does not appear to be a struct!")
 	ErrNotStructPointer       = errors.New("Value passed was not a struct pointer!")
-	ErrUnsupportedFieldType   = errors.New("Unsupported struct field type!")
 )
 
 type Config struct {
-	ConfigFileName  string // name of config file (without extension)
-	ConfigFilePaths []string
+	FileName        string // name of config file (without extension)
+	FilePaths       []string
 	WatchConfigFile bool
 
 	externalConfig *interface{}
@@ -70,31 +61,6 @@ func (c *Config) canLoad(val interface{}) error {
 	return nil
 }
 
-// Check to see if we can load, value must me a struct pointer
-// Parse configuration values
-// Populate defaults
-// Populate flags, env, config file values
-// FUTURE: Populate remote config
-// Fetch values from viper, populate struct
-
-func (c *Config) parseStructConfigValues(structRef reflect.Value, val interface{}) error {
-	// Parse configurator values on our struct
-	defaultValues := parseDefaultValues(structRef)
-	envValues := parseEnvValues(structRef)
-	flagValues := parseFlagValues(structRef)
-	// configValues := parseConfigFileValues(structRef)
-
-	c.populateDefaults(defaultValues)
-	c.bindEnvValues(envValues)
-	c.bindFlagValues(flagValues)
-	// c.bindConfigFileValues(configValues)
-
-	// Populate config values
-	err := c.populateConfigStruct(structRef)
-
-	return err
-}
-
 //////////
 // Parsing
 //////////
@@ -102,6 +68,24 @@ func (c *Config) parseStructConfigValues(structRef reflect.Value, val interface{
 type parsedValue struct {
 	tagValue  string
 	fieldType reflect.Type
+}
+
+func (c *Config) parseStructConfigValues(structRef reflect.Value, val interface{}) error {
+	// Parse configurator values on our struct
+	defaultValues := parseDefaultValues(structRef)
+	envValues := parseEnvValues(structRef)
+	flagValues := parseFlagValues(structRef)
+	configValues := parseConfigFileValues(structRef)
+
+	c.populateDefaults(defaultValues)
+	c.bindEnvValues(envValues)
+	c.bindFlagValues(flagValues)
+	c.bindConfigFileValues(configValues)
+
+	// Populate config values
+	err := c.populateConfigStruct(structRef)
+
+	return err
 }
 
 func parseDefaultValues(structRef reflect.Value) map[string]parsedValue {
@@ -153,6 +137,8 @@ func (c *Config) populateDefaults(defaultValues map[string]parsedValue) {
 }
 
 func (c *Config) populateConfigStruct(structRef reflect.Value) error {
+	c.viper.ReadInConfig()
+
 	structType := structRef.Type()
 	for i := 0; i < structType.NumField(); i++ {
 		structField := structType.Field(i)
@@ -195,9 +181,18 @@ func (c *Config) bindFlagValues(flagValues map[string]parsedValue) *pflag.FlagSe
 }
 
 func (c *Config) bindConfigFileValues(configValues map[string]parsedValue) {
-	// for k, v := range configValues {
-	// 	//c.viper.BindEnv(k, v)
-	// }
+	c.viper.SetConfigName(c.FileName)
+
+	for _, filePath := range c.FilePaths {
+		fmt.Printf("Adding config path: <%s>\n", filePath)
+		c.viper.AddConfigPath(filePath)
+	}
+
+	// Map the config file keys to our variable
+	for k, v := range configValues {
+		fmt.Printf("Regisering alias: <%s:%s>\n", k, v.tagValue)
+		c.viper.RegisterAlias(k, v.tagValue)
+	}
 }
 
 func populateStructField(field reflect.StructField, fieldValue reflect.Value, value string) error {
@@ -227,9 +222,8 @@ func populateStructField(field reflect.StructField, fieldValue reflect.Value, va
 			fieldValue.SetFloat(floatValue)
 		}
 
-	case reflect.Int:
+	case reflect.Int, reflect.Int8, reflect.Int32, reflect.Int64:
 		intValue, err := strconv.ParseInt(value, 10, 64)
-		fmt.Printf("populateStructField INT <%s> Value: <%v>, Field: <%s>\n", value, intValue, field.Name)
 		if err != nil {
 			return fmt.Errorf("Unable to convert value (%s) for to int for field: %s! Error: %s", value, field.Name, err.Error())
 		}
@@ -237,12 +231,22 @@ func populateStructField(field reflect.StructField, fieldValue reflect.Value, va
 		if isZeroOfUnderlyingType(fieldValue.Interface()) {
 			fieldValue.SetInt(intValue)
 		}
+	case reflect.Uint, reflect.Uint8, reflect.Uint32, reflect.Uint64:
+		intValue, err := strconv.ParseUint(value, 10, 64)
+		if err != nil {
+			return fmt.Errorf("Unable to convert value (%s) for to unsigned int for field: %s! Error: %s", value, field.Name, err.Error())
+		}
 
-	default:
-		return ErrUnsupportedFieldType
+		if isZeroOfUnderlyingType(fieldValue.Interface()) {
+			fieldValue.SetUint(intValue)
+		}
 	}
 	return nil
 }
+
+//////////
+// Utility
+//////////
 
 func isZeroOfUnderlyingType(x interface{}) bool {
 	return x == reflect.Zero(reflect.TypeOf(x)).Interface()

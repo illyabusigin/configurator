@@ -6,11 +6,33 @@ import (
 	"reflect"
 	"testing"
 
-	jww "github.com/spf13/jwalterweatherman"
+	// jww "github.com/spf13/jwalterweatherman"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestConfigLoadFailureScenarios(t *testing.T) {
+	type testConfig struct {
+		Config
+		Value string
+	}
+
+	// Pass a struct directly instead of pointer reference
+	config := testConfig{}
+	err := config.Load(config)
+
+	assert.NotNil(t, err)
+	assert.Equal(t, err, ErrNotStructPointer)
+
+	// Pass a non-struct by reference
+	badValue := []int{1, 2, 3}
+	c := Config{}
+	err = c.Load(&badValue)
+
+	assert.NotNil(t, err)
+	assert.Equal(t, err, ErrNotStruct)
+}
 
 func TestLoadFromDefaultsSuccess(t *testing.T) {
 	type testEnvConfigWithDefaults struct {
@@ -47,6 +69,7 @@ func TestLoadFromDefaultsWithoutOverridingAlreadySetValues(t *testing.T) {
 		Port        int     `env:"APP_PORT" default:"3306"`
 		TestFloat   float32 `env:"APP_FLOAT" default:"1.5"`
 		TestBool    bool    `env:"APP_BOOL" default:"true"`
+		Counter     uint32  `env:"APP_COUNTER" default:"1"`
 	}
 
 	config := testEnvConfigWithDefaults{}
@@ -60,6 +83,7 @@ func TestLoadFromDefaultsWithoutOverridingAlreadySetValues(t *testing.T) {
 	assert.Equal(t, "development", config.Environment)
 	assert.Equal(t, "testhost", config.Host)
 	assert.Equal(t, 1000, config.Port)
+	assert.Equal(t, uint32(1), config.Counter)
 	assert.Equal(t, float32(1.5), config.TestFloat)
 	assert.True(t, config.TestBool)
 }
@@ -205,7 +229,6 @@ func TestLoadConfigFromFlagsFailureUseDefaults(t *testing.T) {
 }
 
 func TestLoadConfigFromFlagsFailureBadValues(t *testing.T) {
-	jww.SetStdoutThreshold(jww.LevelTrace)
 	type testFlagConfig struct {
 		Config
 
@@ -245,4 +268,53 @@ func TestLoadConfigFromFlagsFailureBadValues(t *testing.T) {
 	err := config.populateConfigStruct(structRef)
 
 	assert.NotNil(t, err)
+}
+
+func TestLoadConfigFromFileSuccess(t *testing.T) {
+	type testFileConfig struct {
+		Config
+
+		Environment string  `file:"env" default:"development"`
+		Host        string  `file:"host" default:"localhost"`
+		Port        int     `file:"port" default:"3306"`
+		Version     float32 `file:"version" default:"1.5"`
+		TestBool    bool    `file:"enabled" default:"false"`
+	}
+
+	config := testFileConfig{}
+	config.FileName = "good_config"
+	config.FilePaths = []string{
+		"./_test/",
+	}
+
+	err := config.Load(&config)
+	assert.Nil(t, err)
+
+	assert.Equal(t, "development", config.Environment)
+	assert.Equal(t, "127.0.0.1", config.Host)
+	assert.Equal(t, 3000, config.Port)
+	assert.Equal(t, float32(2), config.Version)
+	assert.True(t, config.TestBool)
+}
+
+func TestLoadConfigFromFileFailureBadValue(t *testing.T) {
+	type testFileConfig struct {
+		Config
+
+		Environment string  `file:"env" default:"development"`
+		Host        uint32  `file:"host" default:"3000"` // changed host to uint32, while it's a string in JSON file
+		Port        int     `file:"port" default:"3306"`
+		Version     float32 `file:"version" default:"1.5"`
+		TestBool    bool    `file:"enabled" default:"false"`
+	}
+
+	config := testFileConfig{}
+	config.FileName = "good_config"
+	config.FilePaths = []string{
+		"./_test/",
+	}
+
+	err := config.Load(&config)
+	assert.NotNil(t, err)
+
 }
