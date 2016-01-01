@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strconv"
 
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
@@ -80,12 +81,12 @@ func (c *Config) parseStructConfigValues(structRef reflect.Value, val interface{
 	// Parse configurator values on our struct
 	defaultValues := parseDefaultValues(structRef)
 	envValues := parseEnvValues(structRef)
-	// flagValues := parseFlagValues(structRef)
+	flagValues := parseFlagValues(structRef)
 	// configValues := parseConfigFileValues(structRef)
 
 	c.populateDefaults(defaultValues)
 	c.bindEnvValues(envValues)
-	// c.bindFlagValues(flagValues)
+	c.bindFlagValues(flagValues)
 	// c.bindConfigFileValues(configValues)
 
 	// Populate config values
@@ -98,6 +99,11 @@ func (c *Config) parseStructConfigValues(structRef reflect.Value, val interface{
 // Parsing
 //////////
 
+type parsedValue struct {
+	tagValue  string
+	fieldType reflect.Type
+}
+
 func parseDefaultValues(structRef reflect.Value) map[string]parsedValue {
 	values := parseValuesForTag(structRef, tagDefault)
 	return values
@@ -108,11 +114,6 @@ func parseEnvValues(structRef reflect.Value) map[string]parsedValue {
 	return values
 }
 
-type flagConfig struct {
-	structField string
-	structType  string
-}
-
 func parseFlagValues(structRef reflect.Value) map[string]parsedValue {
 	values := parseValuesForTag(structRef, tagFlag)
 	return values
@@ -121,11 +122,6 @@ func parseFlagValues(structRef reflect.Value) map[string]parsedValue {
 func parseConfigFileValues(structRef reflect.Value) map[string]parsedValue {
 	values := parseValuesForTag(structRef, tagFile)
 	return values
-}
-
-type parsedValue struct {
-	tagValue  string
-	fieldType reflect.Type
 }
 
 func parseValuesForTag(structRef reflect.Value, tagName string) map[string]parsedValue {
@@ -151,6 +147,7 @@ func parseValuesForTag(structRef reflect.Value, tagName string) map[string]parse
 
 func (c *Config) populateDefaults(defaultValues map[string]parsedValue) {
 	for k, v := range defaultValues {
+		fmt.Printf("Setting default <%v> for field: <%s>\n", v.tagValue, k)
 		c.viper.SetDefault(k, v.tagValue)
 	}
 }
@@ -159,10 +156,10 @@ func (c *Config) populateConfigStruct(structRef reflect.Value) error {
 	structType := structRef.Type()
 	for i := 0; i < structType.NumField(); i++ {
 		structField := structType.Field(i)
-		stringValue := c.viper.GetString(structField.Name)
-		fmt.Println("string value", structField.Name, stringValue)
-		if stringValue != "" {
-			err := populateStructField(structField, structRef.Field(i), stringValue)
+		configValue := c.viper.Get(structField.Name)
+		fmt.Printf("configValue: <%v> Field: <%s>\n", configValue, structField.Name)
+		if configValue != nil {
+			err := populateStructField(structField, structRef.Field(i), fmt.Sprintf("%v", configValue))
 
 			if err != nil {
 				return err
@@ -183,11 +180,31 @@ func (c *Config) bindEnvValues(envValues map[string]parsedValue) {
 	}
 }
 
-func (c *Config) bindFlagValues(flagValues map[string]parsedValue) {
-	// for k, v := range flagValues {
-	// 	//c.viper.BindPFlag(key, flag)
-	// 	//c.viper.BindEnv(k, v)
-	// }
+func (c *Config) bindFlagValues(flagValues map[string]parsedValue) *pflag.FlagSet {
+	flagSet := pflag.NewFlagSet("configurator", pflag.PanicOnError)
+
+	for k, v := range flagValues {
+
+		// Introspect the variable type, instantiate a pflag
+		switch v.fieldType.Kind() {
+		case reflect.String:
+			pflag.String(v.tagValue, "", "")
+		case reflect.Bool:
+			pflag.Bool(v.tagValue, false, "")
+		case reflect.Float32, reflect.Float64:
+			pflag.Float64(v.tagValue, 0, "")
+		case reflect.Int:
+			pflag.Int64(v.tagValue, 0, "")
+		}
+
+		flag := pflag.Lookup(v.tagValue)
+		if flag != nil {
+			c.viper.BindPFlag(k, flag)
+			flagSet.AddFlag(flag)
+		}
+	}
+
+	return flagSet
 }
 
 func (c *Config) bindConfigFileValues(configValues map[string]parsedValue) {
@@ -214,6 +231,7 @@ func populateStructField(field reflect.StructField, fieldValue reflect.Value, va
 		fieldValue.SetFloat(floatValue)
 	case reflect.Int:
 		intValue, err := strconv.ParseInt(value, 10, 64)
+		fmt.Printf("populateStructField INT <%s> Value: <%v>, Field: <%s>\n", value, intValue, field.Name)
 		if err != nil {
 			return fmt.Errorf("Unable to convert value (%s) for to int for field: %s! Error: %s", value, field.Name, err.Error())
 		}
