@@ -157,7 +157,7 @@ func (c *Config) populateConfigStruct(structRef reflect.Value) error {
 	for i := 0; i < structType.NumField(); i++ {
 		structField := structType.Field(i)
 		configValue := c.viper.Get(structField.Name)
-		fmt.Printf("configValue: <%v> Field: <%s>\n", configValue, structField.Name)
+		fmt.Printf("configValue: <%v> Field: <%s>\n", c.viper.GetString(structField.Name), structField.Name)
 		if configValue != nil {
 			err := populateStructField(structField, structRef.Field(i), fmt.Sprintf("%v", configValue))
 
@@ -184,24 +184,11 @@ func (c *Config) bindFlagValues(flagValues map[string]parsedValue) *pflag.FlagSe
 	flagSet := pflag.NewFlagSet("configurator", pflag.PanicOnError)
 
 	for k, v := range flagValues {
-
-		// Introspect the variable type, instantiate a pflag
-		switch v.fieldType.Kind() {
-		case reflect.String:
-			pflag.String(v.tagValue, "", "")
-		case reflect.Bool:
-			pflag.Bool(v.tagValue, false, "")
-		case reflect.Float32, reflect.Float64:
-			pflag.Float64(v.tagValue, 0, "")
-		case reflect.Int:
-			pflag.Int64(v.tagValue, 0, "")
-		}
-
+		pflag.String(v.tagValue, "", "")
 		flag := pflag.Lookup(v.tagValue)
-		if flag != nil {
-			c.viper.BindPFlag(k, flag)
-			flagSet.AddFlag(flag)
-		}
+
+		c.viper.BindPFlag(k, flag)
+		flagSet.AddFlag(flag)
 	}
 
 	return flagSet
@@ -216,26 +203,41 @@ func (c *Config) bindConfigFileValues(configValues map[string]parsedValue) {
 func populateStructField(field reflect.StructField, fieldValue reflect.Value, value string) error {
 	switch fieldValue.Kind() {
 	case reflect.String:
-		fieldValue.SetString(value)
+		if isZeroOfUnderlyingType(fieldValue.Interface()) {
+			fieldValue.SetString(value)
+		}
+
 	case reflect.Bool:
 		bvalue, err := strconv.ParseBool(value)
 		if err != nil {
 			return fmt.Errorf("Unable to convert value (%s) for to bool for field: %s! Error: %s", value, field.Name, err.Error())
 		}
-		fieldValue.SetBool(bvalue)
+
+		if isZeroOfUnderlyingType(fieldValue.Interface()) {
+			fieldValue.SetBool(bvalue)
+		}
+
 	case reflect.Float32, reflect.Float64:
 		floatValue, err := strconv.ParseFloat(value, 64)
 		if err != nil {
 			return fmt.Errorf("Unable to convert value (%s) for to float for field: %s! Error: %s", value, field.Name, err.Error())
 		}
-		fieldValue.SetFloat(floatValue)
+
+		if isZeroOfUnderlyingType(fieldValue.Interface()) {
+			fieldValue.SetFloat(floatValue)
+		}
+
 	case reflect.Int:
 		intValue, err := strconv.ParseInt(value, 10, 64)
 		fmt.Printf("populateStructField INT <%s> Value: <%v>, Field: <%s>\n", value, intValue, field.Name)
 		if err != nil {
 			return fmt.Errorf("Unable to convert value (%s) for to int for field: %s! Error: %s", value, field.Name, err.Error())
 		}
-		fieldValue.SetInt(intValue)
+
+		if isZeroOfUnderlyingType(fieldValue.Interface()) {
+			fieldValue.SetInt(intValue)
+		}
+
 	default:
 		return ErrUnsupportedFieldType
 	}

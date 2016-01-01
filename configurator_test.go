@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	//_ jww "github.com/spf13/jwalterweatherman"
+	jww "github.com/spf13/jwalterweatherman"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
@@ -33,6 +33,33 @@ func TestLoadFromDefaultsSuccess(t *testing.T) {
 	assert.Equal(t, "development", config.Environment)
 	assert.Equal(t, "localhost", config.Host)
 	assert.Equal(t, 3306, config.Port)
+	assert.Equal(t, float32(1.5), config.TestFloat)
+	assert.True(t, config.TestBool)
+}
+
+func TestLoadFromDefaultsWithoutOverridingAlreadySetValues(t *testing.T) {
+	type testEnvConfigWithDefaults struct {
+		Config
+
+		// Annotation your properties with where config data can come from
+		Environment string  `env:"APP_ENV" default:"development"`
+		Host        string  `env:"APP_HOST" default:"localhost"`
+		Port        int     `env:"APP_PORT" default:"3306"`
+		TestFloat   float32 `env:"APP_FLOAT" default:"1.5"`
+		TestBool    bool    `env:"APP_BOOL" default:"true"`
+	}
+
+	config := testEnvConfigWithDefaults{}
+	config.Host = "testhost"
+	config.Port = 1000
+	os.Clearenv()
+
+	err := config.Load(&config)
+	assert.Nil(t, err)
+
+	assert.Equal(t, "development", config.Environment)
+	assert.Equal(t, "testhost", config.Host)
+	assert.Equal(t, 1000, config.Port)
 	assert.Equal(t, float32(1.5), config.TestFloat)
 	assert.True(t, config.TestBool)
 }
@@ -178,6 +205,7 @@ func TestLoadConfigFromFlagsFailureUseDefaults(t *testing.T) {
 }
 
 func TestLoadConfigFromFlagsFailureBadValues(t *testing.T) {
+	jww.SetStdoutThreshold(jww.LevelTrace)
 	type testFlagConfig struct {
 		Config
 
@@ -201,7 +229,7 @@ func TestLoadConfigFromFlagsFailureBadValues(t *testing.T) {
 	var expectedFlagValues = map[string]string{
 		"env2":      "dev",
 		"host2":     "127.0.0.1",
-		"port2":     "abcdef",
+		"port2":     "asb",
 		"version2":  "3.14159",
 		"testbool2": "true",
 	}
@@ -217,9 +245,4 @@ func TestLoadConfigFromFlagsFailureBadValues(t *testing.T) {
 	err := config.populateConfigStruct(structRef)
 
 	assert.NotNil(t, err)
-	assert.Equal(t, "dev", config.Environment)
-	assert.Equal(t, "127.0.0.1", config.Host)
-	assert.Equal(t, 4000, config.Port)
-	assert.Equal(t, float32(3.14159), config.Version)
-	assert.True(t, config.TestBool)
 }
