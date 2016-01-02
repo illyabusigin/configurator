@@ -1,3 +1,22 @@
+// Package configurator implements simple configuration built on top of Viper.
+//
+// It aims to make application configuration as easy as possible.
+// This is accomplish by allowing you to annotate your struct with env, file,
+// flag, default annotations that will tell Viper where to where to look for
+// configuration values. Since configurator is built on top of Viper the
+// same source precedence are applicable:
+//
+// The priority of config sources is the following:
+// 1. Overrides, or setting the config struct field directly.\n
+// 2. Flags - note that github.com/spf13/pflag is used
+// 3. Environment Variables
+// 4. Configuration file values
+// 5. Default values
+//
+// NOTE: Viper key/value store and/or watching config sources is not yet supported.
+//
+// Use of this source code is governed by an MIT-style
+// license that can be found in the LICENSE file.
 package configurator
 
 import (
@@ -19,51 +38,119 @@ const (
 )
 
 var (
-	ErrNoConfigValuesDetected = errors.New("No configuration values detected!")
-	ErrNotStruct              = errors.New("Value does not appear to be a struct!")
-	ErrNotStructPointer       = errors.New("Value passed was not a struct pointer!")
+	// ErrValueNotStruct is returned when value passed to config.Load() is not a struct.
+	ErrValueNotStruct = errors.New("Value does not appear to be a struct!")
+
+	// ErrValueNotStructPointer is returned when value passed to config.Load() is not a pointer to a struct.
+	ErrValueNotStructPointer = errors.New("Value passed was not a struct pointer!")
 )
 
+var c *Config
+
+func init() {
+	c = &Config{
+		FileName:  "config",
+		FilePaths: []string{"."},
+	}
+}
+
+// Config is a convenience configuration struct built on top of Viper. You
+// use Config by annotating your configuration struct with env, flag, file,
+// and default tags which will be parsed by Config. You can either
+// embed Configurator.Config in your struct or reference configurator.Load()
+// directly. The priority of the sources is the same Viper:
+// 1. overrides
+// 2. flags
+// 3. env. variables
+// 4. config file
+// 5. defaults
+//
+// For example, if you embedded configurator.Config in your struct and
+// configured it like so:
+//
+//  type AppConfig struct {
+//	configurator.Config
+//	Secret      string `file:"secret" env:"APP_SECRET" flag:"secret" default:"abc123xyz"`
+//	User        string `file:"user" env:"APP_USER" flag:"user" default:"root"`
+//	Environment string `file:"env" env:"APP_ENV" flag:"env" default:"dev"`
+//   }
+//
+// Assuming your source values were the following:
+//  File : {
+// 	"user": "test_user"
+//	"secret": "defaultsecret"
+//  }
+//  Env : {
+//  	"APP_SECRET": "somesecretkey"
+//  }
+//
+// This is how you would load the configuration:
+//
+//  func loadConfig() {
+// 	config := AppConfig{}
+// 	err := config.Load(&config)
+//
+// 	if err != nil {
+// 		// Always handle your errors
+// 		log.Fatalf("Unable to load application configuration! Error: %s", err.Error())
+// 	}
+//
+// 	fmt.Println("config.Secret =", config.Secret)           // somesecretkey, from env
+// 	fmt.Println("config.User =", config.User)               // test_user, from file
+// 	fmt.Println("config.Environment =", config.Environment) // dev, from defaults
+//  }
+//
 type Config struct {
-	FileName        string // name of config file (without extension)
-	FilePaths       []string
-	WatchConfigFile bool
+	// FileName is the name of the configuration file without any extensions.
+	FileName string
+
+	// FilePaths is an array of configuration file paths to search for the configuration file.
+	FilePaths []string
 
 	externalConfig *interface{}
 	viper          *viper.Viper
 }
 
-// Load blah blah
-func (c *Config) Load(val interface{}) error {
+// Load attempts to populate the struct with configuration values.
+// The value passed to load must be a struct reference or an error
+// will be returned.
+func Load(structRef interface{}) error {
+	return c.Load(structRef)
+}
+
+// Load attempts to populate the struct with configuration values.
+// The value passed to load must be a struct reference or an error
+// will be returned.
+func (c *Config) Load(structRef interface{}) error {
 	c.viper = viper.New()
 
-	canLoadErr := c.canLoad(val)
+	canLoadErr := c.canLoad(structRef)
 	if canLoadErr != nil {
 		return canLoadErr
 	}
 
-	ptrRef := reflect.ValueOf(val)
+	ptrRef := reflect.ValueOf(structRef)
 	ref := ptrRef.Elem()
 
-	return c.parseStructConfigValues(ref, val)
+	return c.parseStructConfigValues(ref, structRef)
 }
 
-func (c *Config) canLoad(val interface{}) error {
-	ptrRef := reflect.ValueOf(val)
+func (c *Config) canLoad(structRef interface{}) error {
+	ptrRef := reflect.ValueOf(structRef)
 	if ptrRef.Kind() != reflect.Ptr {
-		return ErrNotStructPointer
+		return ErrValueNotStructPointer
 	}
 	elemRef := ptrRef.Elem()
 	if elemRef.Kind() != reflect.Struct {
-		return ErrNotStruct
+		return ErrValueNotStruct
 	}
 
 	return nil
 }
 
-//////////
-// Parsing
-//////////
+/////////////
+// Parsing //
+/////////////
 
 type parsedValue struct {
 	tagValue  string
@@ -82,7 +169,6 @@ func (c *Config) parseStructConfigValues(structRef reflect.Value, val interface{
 	c.bindFlagValues(flagValues)
 	c.bindConfigFileValues(configValues)
 
-	// Populate config values
 	err := c.populateConfigStruct(structRef)
 
 	return err
@@ -125,40 +211,9 @@ func parseValuesForTag(structRef reflect.Value, tagName string) map[string]parse
 	return values
 }
 
-///////////
-// Populate
-///////////
-
-func (c *Config) populateDefaults(defaultValues map[string]parsedValue) {
-	for k, v := range defaultValues {
-		fmt.Printf("Setting default <%v> for field: <%s>\n", v.tagValue, k)
-		c.viper.SetDefault(k, v.tagValue)
-	}
-}
-
-func (c *Config) populateConfigStruct(structRef reflect.Value) error {
-	c.viper.ReadInConfig()
-
-	structType := structRef.Type()
-	for i := 0; i < structType.NumField(); i++ {
-		structField := structType.Field(i)
-		configValue := c.viper.Get(structField.Name)
-		fmt.Printf("configValue: <%v> Field: <%s>\n", c.viper.GetString(structField.Name), structField.Name)
-		if configValue != nil {
-			err := populateStructField(structField, structRef.Field(i), fmt.Sprintf("%v", configValue))
-
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-//////////
-// Binding
-//////////
+/////////////
+// Binding //
+/////////////
 
 func (c *Config) bindEnvValues(envValues map[string]parsedValue) {
 	for k, v := range envValues {
@@ -184,15 +239,42 @@ func (c *Config) bindConfigFileValues(configValues map[string]parsedValue) {
 	c.viper.SetConfigName(c.FileName)
 
 	for _, filePath := range c.FilePaths {
-		fmt.Printf("Adding config path: <%s>\n", filePath)
 		c.viper.AddConfigPath(filePath)
 	}
 
 	// Map the config file keys to our variable
 	for k, v := range configValues {
-		fmt.Printf("Regisering alias: <%s:%s>\n", k, v.tagValue)
 		c.viper.RegisterAlias(k, v.tagValue)
 	}
+}
+
+//////////////
+// Populate //
+//////////////
+
+func (c *Config) populateDefaults(defaultValues map[string]parsedValue) {
+	for k, v := range defaultValues {
+		c.viper.SetDefault(k, v.tagValue)
+	}
+}
+
+func (c *Config) populateConfigStruct(structRef reflect.Value) error {
+	c.viper.ReadInConfig()
+
+	structType := structRef.Type()
+	for i := 0; i < structType.NumField(); i++ {
+		structField := structType.Field(i)
+		configValue := c.viper.Get(structField.Name)
+		if configValue != nil {
+			err := populateStructField(structField, structRef.Field(i), fmt.Sprintf("%v", configValue))
+
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 func populateStructField(field reflect.StructField, fieldValue reflect.Value, value string) error {
@@ -244,10 +326,11 @@ func populateStructField(field reflect.StructField, fieldValue reflect.Value, va
 	return nil
 }
 
-//////////
-// Utility
-//////////
+/////////////
+// Utility //
+/////////////
 
 func isZeroOfUnderlyingType(x interface{}) bool {
+	// Source: http://stackoverflow.com/questions/13901819/quick-way-to-detect-empty-values-via-reflection-in-go
 	return x == reflect.Zero(reflect.TypeOf(x)).Interface()
 }

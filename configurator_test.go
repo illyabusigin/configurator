@@ -22,7 +22,7 @@ func TestConfigLoadFailureScenarios(t *testing.T) {
 	err := config.Load(config)
 
 	assert.NotNil(t, err)
-	assert.Equal(t, err, ErrNotStructPointer)
+	assert.Equal(t, err, ErrValueNotStructPointer)
 
 	// Pass a non-struct by reference
 	badValue := []int{1, 2, 3}
@@ -30,7 +30,7 @@ func TestConfigLoadFailureScenarios(t *testing.T) {
 	err = c.Load(&badValue)
 
 	assert.NotNil(t, err)
-	assert.Equal(t, err, ErrNotStruct)
+	assert.Equal(t, err, ErrValueNotStruct)
 }
 
 func TestLoadFromDefaultsSuccess(t *testing.T) {
@@ -109,7 +109,7 @@ func TestLoadFromDefaultsFailureBadBoolDefault(t *testing.T) {
 	config := badDefaults{}
 	os.Clearenv()
 
-	err := config.Load(&config)
+	err := Load(&config)
 	assert.NotNil(t, err)
 }
 
