@@ -4,7 +4,7 @@ go:
   - 1.3
   - tip
 install:
-  - go get ./... -t
+  - go get -t ./...
   - go get golang.org/x/tools/cmd/cover
   - go get github.com/mattn/goveralls
 script:
