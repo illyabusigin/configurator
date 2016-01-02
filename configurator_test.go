@@ -6,7 +6,6 @@ import (
 	"reflect"
 	"testing"
 
-	// jww "github.com/spf13/jwalterweatherman"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
@@ -281,13 +280,35 @@ func TestLoadConfigFromFileSuccess(t *testing.T) {
 		TestBool    bool    `file:"enabled" default:"false"`
 	}
 
+	configData := []byte(`{
+    "env": "development",
+    "host": "127.0.0.1",
+    "port": 3000,
+    "version": 2,
+    "enabled": true
+	}`)
+
+	filePath := "./config.json"
+	testConfig, err := os.Create(filePath)
+
+	defer func() {
+		testConfig.Close()
+		os.Remove(filePath)
+	}()
+
+	assert.Nil(t, err)
+
+	_, err = testConfig.Write(configData)
+	assert.Nil(t, err, "File write error should be nil!")
+	testConfig.Sync()
+
 	config := testFileConfig{}
-	config.FileName = "good_config"
+	config.FileName = "config"
 	config.FilePaths = []string{
-		"./_test/",
+		".",
 	}
 
-	err := config.Load(&config)
+	err = config.Load(&config)
 	assert.Nil(t, err)
 
 	assert.Equal(t, "development", config.Environment)
@@ -308,13 +329,46 @@ func TestLoadConfigFromFileFailureBadValue(t *testing.T) {
 		TestBool    bool    `file:"enabled" default:"false"`
 	}
 
+	configData := []byte(`{
+    "env": "development",
+    "host": "127.0.0.1",
+    "port": 3000,
+    "version": 2,
+    "enabled": true
+	}`)
+
+	filePath := "./config.json"
+	testConfig, err := os.Create(filePath)
+
+	defer func() {
+		testConfig.Close()
+		os.Remove(filePath)
+	}()
+
+	assert.Nil(t, err)
+
+	_, err = testConfig.Write(configData)
+	assert.Nil(t, err, "File write error should be nil!")
+	testConfig.Sync()
+
 	config := testFileConfig{}
-	config.FileName = "good_config"
+	config.FileName = "config"
 	config.FilePaths = []string{
-		"./_test/",
+		".",
 	}
 
-	err := config.Load(&config)
+	err = config.Load(&config)
 	assert.NotNil(t, err)
+}
 
+func TestCompoundSourcesScenario(t *testing.T) {
+	type testFileConfig struct {
+		Config
+
+		Environment string  `file:"env" env:"APP_ENV" flag:"env5" default:"development"`
+		Host        string  `file:"host" env:"APP_HOST" flag:"host5" default:"3000"` // changed host to uint32, while it's a string in JSON file
+		Port        uint    `file:"port" env:"APP_PORT" flag:"port5" default:"3306"`
+		Version     float32 `file:"version" env:"APP_VERSION" flag:"version5" default:"1.5"`
+		Restricted  bool    `file:"enabled" env:"APP_RESTRICTED" flag:"restricted" default:"false"`
+	}
 }
