@@ -4,14 +4,14 @@
 // This is accomplish by allowing you to annotate your struct with env, file,
 // flag, default annotations that will tell Viper where to where to look for
 // configuration values. Since configurator is built on top of Viper the
-// same source precedence are applicable:
+// same source precedence is applicable.
 //
 // The priority of config sources is the following:
-// 1. Overrides, or setting the config struct field directly.\n
-// 2. Flags - note that github.com/spf13/pflag is used
-// 3. Environment Variables
-// 4. Configuration file values
-// 5. Default values
+// 1. Overrides, or setting the config struct field directly.
+// 2. Flags - note that github.com/spf13/pflag is used  in lieu of the standard flag package.
+// 3. Environment variables.
+// 4. Configuration file values.
+// 5. Default values.
 //
 // NOTE: Viper key/value store and/or watching config sources is not yet supported.
 //
