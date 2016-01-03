@@ -109,6 +109,9 @@ func TestLoadFromDefaultsFailureBadBoolDefault(t *testing.T) {
 	config := badDefaults{}
 	os.Clearenv()
 
+	SetFileName("config")
+	SetFilePaths([]string{"."})
+
 	err := Load(&config)
 	assert.NotNil(t, err)
 }
@@ -359,16 +362,4 @@ func TestLoadConfigFromFileFailureBadValue(t *testing.T) {
 
 	err = config.Load(&config)
 	assert.NotNil(t, err)
-}
-
-func TestCompoundSourcesScenario(t *testing.T) {
-	type testFileConfig struct {
-		Config
-
-		Environment string  `file:"env" env:"APP_ENV" flag:"env5" default:"development"`
-		Host        string  `file:"host" env:"APP_HOST" flag:"host5" default:"3000"` // changed host to uint32, while it's a string in JSON file
-		Port        uint    `file:"port" env:"APP_PORT" flag:"port5" default:"3306"`
-		Version     float32 `file:"version" env:"APP_VERSION" flag:"version5" default:"1.5"`
-		Restricted  bool    `file:"enabled" env:"APP_RESTRICTED" flag:"restricted" default:"false"`
-	}
 }

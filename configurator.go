@@ -118,6 +118,16 @@ func Load(structRef interface{}) error {
 	return c.Load(structRef)
 }
 
+// SetFileName specifies the name of the configuration file without any extensions.
+func SetFileName(fileName string) {
+	c.FileName = fileName
+}
+
+// SetFilePaths specifies the array of configuration file paths to search for the configuration file.
+func SetFilePaths(filePaths []string) {
+	c.FilePaths = filePaths
+}
+
 // Load attempts to populate the struct with configuration values.
 // The value passed to load must be a struct reference or an error
 // will be returned.
