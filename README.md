@@ -73,11 +73,16 @@ var Config AppConfig
 
 func main() {
 	Config = AppConfig{}
+	Config.FileName = "config"
+	Config.FilePaths = []string{
+		".",
+	}
+	
 	err := Config.Load(& Config)
 	
 	if err != nil {
 		// Always handle your errors
-		log.Fatalf("Unable to load application configuration! Error: %s", 		err.Error())
+		log.Fatalf("Unable to load application configuration! Error: %s", err.Error())
 	}
 }
 ```
@@ -101,12 +106,17 @@ var Config AppConfig
 
 func main() {
 	Config = AppConfig{}
+	configurator.FileName = "config"
+	configurator.FilePaths = []string{
+		".",
+	}
+	
 	Config.Secret = "my test secret" // Because we set Secret directly prior to calling configurator.Load() it won't be overridden by configurator.Load()
 	err := configurator.Load(&Config)
 	
 	if err != nil {
 		// Always handle your errors
-		log.Fatalf("Unable to load application configuration! Error: %s", 		err.Error())
+		log.Fatalf("Unable to load application configuration! Error: %s", err.Error())
 	}
 }
 ```
