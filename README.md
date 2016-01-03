@@ -5,7 +5,7 @@ Ridiculously simple application configuration built on top of [Viper](https://gi
 
 ## What is Configurator?
 
-Configurator is an configuration solution built on top of [Viper](https://github.com/spf13/viper). It was designed to be as ridiculously easy to use. Since Configurator is built on top of Viper it supports:
+Configurator is an application configuration solution built on top of [Viper](https://github.com/spf13/viper). It was designed to be as easy to use as possible. Since Configurator is built on top of Viper it supports:
 
 * setting defaults
 * reading from JSON, TOML, YAML and HCL config files
@@ -27,7 +27,6 @@ Configurator does not currently support the following Viper features:
 Viper is awesome and has seen widespread use in many popular Go packages. The goal of Configurator was to make Viper easier to use.
 
 Every application needs some form of configuration and Viper and Configurator make ingesting configuration data easy no matter what the source. If you haven't  familiarized yourself what Viper is, [please do so](https://github.com/spf13/viper#what-is-viper).
-
 
 Since configurator is built on top of Viper the same source precedence are applicable:
 
