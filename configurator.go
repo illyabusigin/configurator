@@ -108,6 +108,7 @@ type Config struct {
 	FilePaths []string
 
 	externalConfig *interface{}
+	accessors      map[string][]string
 	viper          *viper.Viper
 }
 
@@ -133,6 +134,7 @@ func SetFilePaths(filePaths []string) {
 // will be returned.
 func (c *Config) Load(structRef interface{}) error {
 	c.viper = viper.New()
+	c.accessors = make(map[string][]string)
 
 	canLoadErr := c.canLoad(structRef)
 	if canLoadErr != nil {
@@ -174,10 +176,10 @@ func (c *Config) parseStructConfigValues(structRef reflect.Value, val interface{
 	flagValues := parseFlagValues(structRef)
 	configValues := parseConfigFileValues(structRef)
 
-	c.populateDefaults(defaultValues)
 	c.bindEnvValues(envValues)
 	c.bindFlagValues(flagValues)
 	c.bindConfigFileValues(configValues)
+	c.populateDefaults(defaultValues)
 
 	err := c.populateConfigStruct(structRef)
 
@@ -227,6 +229,7 @@ func parseValuesForTag(structRef reflect.Value, tagName string) map[string]parse
 
 func (c *Config) bindEnvValues(envValues map[string]parsedValue) {
 	for k, v := range envValues {
+		c.bindAccessor(k, v.tagValue)
 		c.viper.BindEnv(k, v.tagValue)
 	}
 }
@@ -235,6 +238,7 @@ func (c *Config) bindFlagValues(flagValues map[string]parsedValue) *pflag.FlagSe
 	flagSet := pflag.NewFlagSet("configurator", pflag.PanicOnError)
 
 	for k, v := range flagValues {
+		c.bindAccessor(k, v.tagValue)
 		pflag.String(v.tagValue, "", "")
 		flag := pflag.Lookup(v.tagValue)
 
@@ -254,8 +258,20 @@ func (c *Config) bindConfigFileValues(configValues map[string]parsedValue) {
 
 	// Map the config file keys to our variable
 	for k, v := range configValues {
-		c.viper.RegisterAlias(k, v.tagValue)
+		c.bindAccessor(k, v.tagValue)
 	}
+}
+
+func (c *Config) bindAccessor(key string, value string) {
+	list, exists := c.accessors[key]
+
+	if !exists {
+		list = []string{value}
+	} else {
+		list = append(list, value)
+	}
+
+	c.accessors[key] = list
 }
 
 //////////////
@@ -265,6 +281,7 @@ func (c *Config) bindConfigFileValues(configValues map[string]parsedValue) {
 func (c *Config) populateDefaults(defaultValues map[string]parsedValue) {
 	for k, v := range defaultValues {
 		c.viper.SetDefault(k, v.tagValue)
+		c.bindAccessor(k, k)
 	}
 }
 
@@ -274,12 +291,17 @@ func (c *Config) populateConfigStruct(structRef reflect.Value) error {
 	structType := structRef.Type()
 	for i := 0; i < structType.NumField(); i++ {
 		structField := structType.Field(i)
-		configValue := c.viper.Get(structField.Name)
-		if configValue != nil {
-			err := populateStructField(structField, structRef.Field(i), fmt.Sprintf("%v", configValue))
+		accessors := c.accessors[structField.Name]
 
-			if err != nil {
-				return err
+		for _, accessor := range accessors {
+			configValue := c.viper.Get(accessor)
+			if configValue != nil {
+				err := populateStructField(structField, structRef.Field(i), fmt.Sprintf("%v", configValue))
+
+				if err != nil {
+					return err
+				}
+				break
 			}
 		}
 	}

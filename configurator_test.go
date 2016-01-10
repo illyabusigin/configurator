@@ -1,7 +1,6 @@
 package configurator
 
 import (
-	"fmt"
 	"os"
 	"reflect"
 	"testing"
@@ -172,6 +171,7 @@ func TestLoadConfigFromFlagsSuccess(t *testing.T) {
 	}
 
 	config := testFlagConfig{}
+	config.accessors = make(map[string][]string)
 	config.viper = viper.New()
 	os.Clearenv()
 
@@ -179,8 +179,6 @@ func TestLoadConfigFromFlagsSuccess(t *testing.T) {
 	structRef := ptrRef.Elem()
 	flagValues := parseFlagValues(structRef)
 	flagSet := config.bindFlagValues(flagValues)
-
-	fmt.Println("flag vals", flagValues)
 
 	var expectedFlagValues = map[string]string{
 		"env":      "dev",
@@ -220,6 +218,7 @@ func TestLoadConfigFromFlagsFailureUseDefaults(t *testing.T) {
 	}
 
 	config := testFlagConfig{}
+	config.accessors = make(map[string][]string)
 	config.Load(&config)
 
 	// Config should be loaded with defaults
@@ -243,6 +242,7 @@ func TestLoadConfigFromFlagsFailureBadValues(t *testing.T) {
 	}
 
 	config := testFlagConfig{}
+	config.accessors = make(map[string][]string)
 	config.viper = viper.New()
 	os.Clearenv()
 
@@ -306,6 +306,7 @@ func TestLoadConfigFromFileSuccess(t *testing.T) {
 	testConfig.Sync()
 
 	config := testFileConfig{}
+	config.accessors = make(map[string][]string)
 	config.FileName = "config"
 	config.FilePaths = []string{
 		".",
