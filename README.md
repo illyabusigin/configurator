@@ -45,7 +45,7 @@ There are two ways of using Configurator. You can embed configurator.Config into
 type AppConfig struct {
 	configurator.Config
 
-	Secret      string `env:"APP_SECRET" file:"secret flag:"secret" default:"asecretvalue"`
+	Secret      string `env:"APP_SECRET" file:"secret" flag:"secret" default:"asecretvalue"`
 	Port        string `env:"APP_PORT" file:"port" flag:"port" default:"3000"`
 	Environment string `env:"APP_ENV" file:"env" flag:"env" default:"dev"`
 }
@@ -63,7 +63,7 @@ import (
 type AppConfig struct {
 	configurator.Config
 
-	Secret      string `env:"APP_SECRET" file:"secret flag:"secret" default:"asecretvalue"`
+	Secret      string `env:"APP_SECRET" file:"secret" flag:"secret" default:"asecretvalue"`
 	Port        string `env:"APP_PORT" file:"port" flag:"port" default:"3000"`
 	Environment string `env:"APP_ENV" file:"env" flag:"env" default:"dev"`
 }
@@ -96,7 +96,7 @@ import (
 )
 
 type AppConfig struct {
-	Secret      string `env:"APP_SECRET" file:"secret flag:"secret" default:"asecretvalue"`
+	Secret      string `env:"APP_SECRET" file:"secret" flag:"secret" default:"asecretvalue"`
 	Port        string `env:"APP_PORT" file:"port" flag:"port" default:"3000"`
 	Environment string `env:"APP_ENV" file:"env" flag:"env" default:"dev"`
 }
@@ -105,10 +105,10 @@ var Config AppConfig
 
 func main() {
 	Config = AppConfig{}
-	configurator.FileName = "config"
-	configurator.FilePaths = []string{
+	configurator.SetFileName("config")
+	configurator.SetFilePaths([]string{
 		".",
-	}
+	})
 	
 	Config.Secret = "my test secret" // Because we set Secret directly prior to calling configurator.Load() it won't be overridden by configurator.Load()
 	err := configurator.Load(&Config)
